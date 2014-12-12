@@ -15,8 +15,7 @@ def handle_kdbx(kdbx_file):
     print("Keepass2.x")
     unknown = kdbx_file.read(4)
     print("Not idea what this is. {}", unknown)
-    type = struct.unpack('B', kdbx_file.read(1))[0]
-    length = struct.unpack('H', kdbx_file.read(2))[0]
+    type, length = struct.unpack('=BH', kdbx_file.read(3))
     while 0x00 != type:
         content = kdbx_file.read(length)
         if 0x01 == type:
@@ -39,8 +38,7 @@ def handle_kdbx(kdbx_file):
             print("Stream Start Bytes: {}", content)
         elif 0x0a == type:
             print("Inner Random Stream ID: {}", content)
-        type = struct.unpack('B', kdbx_file.read(1))[0]
-        length = struct.unpack('H', kdbx_file.read(2))[0]
+        type, length = struct.unpack('=BH', kdbx_file.read(3))
 
 
 def main():
