@@ -13,6 +13,10 @@ import struct
 import hashlib
 
 
+CIPHER_ID_AES = bytes([0x31, 0xC1, 0xF2, 0xE6, 0xBF, 0x71, 0x43, 0x50, 0xBE,
+                       0x58, 0x05, 0x21, 0x6A, 0xFC, 0x5A, 0xFF])
+
+
 def parse_comment(content):
     return dict(comment=content)
 
@@ -66,8 +70,12 @@ header_parser = {0x01: parse_comment,
 
 
 def handle_kdbx(kdbx_file):
-    unknown = kdbx_file.read(4)
+    file_version = struct.unpack('=I', kdbx_file.read(4))[0]
+    print(file_version)
     header = parse_header(kdbx_file)
+    if CIPHER_ID_AES != header['cypher_id']:
+        print("Cypher ID not recognized")
+
     key = generate_final_master_key(generate_composite_key('asdfg'),
                                     header['transform_seed'],
                                     header['transform_rounds'],
@@ -75,9 +83,13 @@ def handle_kdbx(kdbx_file):
     aes = AES.new(key,
                   mode=AES.MODE_CBC,
                   IV=header['encryption_iv'])
-    body = kdbx_file.read() + b'\00\00\00\00\00\00\00\00\00\00\00\00'
-    body = aes.decrypt(body)
-    print(body)
+    stream_start = aes.decrypt(kdbx_file.read(32))
+    print(stream_start)
+    print(header['stream_start_bytes'])
+    if stream_start == header['stream_start_bytes']:
+        body = kdbx_file.read() + b'\00\00\00\00\00\00\00\00\00\00\00\00'
+        body = aes.decrypt(body)
+        print(body)
 
 
 def parse_header(kdbx_file):
@@ -87,13 +99,12 @@ def parse_header(kdbx_file):
         content = kdbx_file.read(length)
         header.update(header_parser[type](content).items())
         type, length = struct.unpack('=BH', kdbx_file.read(3))
+    header['checksum'] = kdbx_file.read(32)
     return header
 
 
-def generate_composite_key(password, keyfile=None):
+def generate_composite_key(password):
     hash = hashlib.sha256(password.encode('utf-8')).digest()
-    if keyfile is not None:
-        hash += hashlib.sha256(keyfile).digest()
     return hashlib.sha256(hash).digest()
 
 
